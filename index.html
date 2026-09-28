@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Black-Scholes Desk</title>
+<meta name="description" content="Interactive Black-Scholes-Merton option pricer with Greeks, implied volatility solver and scenario P&amp;L.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+:root{
+  --bg:#F1F3F6; --surface:#FFFFFF; --sunk:#F6F8FA; --ink:#121B24; --muted:#5A6875; --faint:#8A97A3;
+  --line:#DCE2E8; --accent:#2346C8; --accent-soft:#E3E8FB; --accent-ink:#FFFFFF;
+  --good:#11795A; --bad:#B3372F; --warn:#9A6A00; --grid:rgba(18,27,36,.07);
+  --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0D1217; --surface:#151C23; --sunk:#11171D; --ink:#E5EBF0; --muted:#95A3B0; --faint:#6B7885;
+    --line:#26313B; --accent:#8099FF; --accent-soft:#1D2646; --accent-ink:#0D1217;
+    --good:#3CC293; --bad:#F07A70; --warn:#E0B04A; --grid:rgba(229,235,240,.07);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0D1217; --surface:#151C23; --sunk:#11171D; --ink:#E5EBF0; --muted:#95A3B0; --faint:#6B7885;
+  --line:#26313B; --accent:#8099FF; --accent-soft:#1D2646; --accent-ink:#0D1217;
+  --good:#3CC293; --bad:#F07A70; --warn:#E0B04A; --grid:rgba(229,235,240,.07);
+}
+*{box-sizing:border-box}
+html{color-scheme:light}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:20px;padding-block:28px 56px}
+.num,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:20px;border-bottom:1px solid var(--line);margin-bottom:24px}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500}
+h1{font-family:var(--serif);font-weight:400;font-size:clamp(34px,5vw,48px);line-height:1;margin:6px 0 0;letter-spacing:-.01em;text-wrap:balance}
+h1 em{font-style:italic;color:var(--accent)}
+.lede{color:var(--muted);max-width:52ch;margin:0}
+
+.layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+aside.inputs{padding:18px;display:flex;flex-direction:column;gap:18px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px)}
+@media (max-width:900px){aside.inputs{position:static}}
+.group-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:0}
+.fields{display:flex;flex-direction:column;gap:14px}
+.field label.row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.field .lbl{font-weight:500}
+.numwrap{display:flex;align-items:center;gap:4px;background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+.numwrap:focus-within{border-color:var(--accent)}
+.numwrap span{color:var(--faint);font-family:var(--mono);font-size:12px}
+.numwrap input{width:78px;border:0;background:transparent;color:var(--ink);font:500 13px var(--mono);text-align:right;outline:none;padding:2px 0}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:3px;gap:3px}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 13px var(--sans);padding:7px 0;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.seg button:focus-visible,.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mini label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+.mini .numwrap input{width:100%}
+.hint{font-size:12px;color:var(--faint);margin:0}
+hr.sep{border:0;border-top:1px solid var(--line);margin:0}
+
+main{display:flex;flex-direction:column;gap:24px;min-width:0}
+section.panel{padding:20px}
+.sec-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px 16px;margin-bottom:14px}
+h2{font-size:15px;font-weight:600;margin:0}
+.sec-head p{margin:0;color:var(--muted);font-size:13px}
+
+.quote{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+@media (max-width:640px){.quote{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.q{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.q .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.q .v{font-family:var(--mono);font-size:26px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.q.main .v{color:var(--accent);font-size:32px}
+.q .s{font-size:12px;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid currentColor;width:max-content}
+.chip.good{color:var(--good)} .chip.bad{color:var(--bad)} .chip.neutral{color:var(--muted)} .chip.warn{color:var(--warn)}
+
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td .gname{font-weight:600}
+td .gsym{font-family:var(--serif);font-style:italic;font-size:17px;color:var(--accent);margin-right:6px}
+td.meaning{color:var(--muted);font-size:13px;min-width:220px}
+tr.second td{background:var(--sunk)}
+.subhead td{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding-top:14px;font-weight:600;background:transparent!important}
+
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px}
+@media (max-width:1100px){.two{grid-template-columns:minmax(0,1fr)}}
+.kv{display:grid;grid-template-columns:1fr auto;gap:8px 16px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.verdict{display:flex;flex-direction:column;gap:6px;padding:14px;border-radius:8px;background:var(--sunk);border:1px solid var(--line);margin-bottom:14px}
+.verdict .big{font-family:var(--mono);font-size:22px;font-weight:500}
+.verdict p{margin:0;color:var(--muted);font-size:13px}
+.err{color:var(--bad);font-size:13px}
+
+.tabs{display:flex;flex-wrap:wrap;gap:4px}
+.tabs button{border:1px solid var(--line);background:var(--surface);color:var(--muted);font:500 12px var(--sans);padding:5px 10px;border-radius:6px;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chartbox{position:relative;height:280px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);margin-top:10px}
+.legend i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:6px}
+
+table.grid td,table.grid th{text-align:center;padding:9px 8px;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px}
+table.grid th{font-family:var(--sans)}
+table.grid td.rowh{font-family:var(--sans);font-size:12px;color:var(--muted);text-align:left;white-space:nowrap}
+table.grid td.cur{outline:2px solid var(--accent);outline-offset:-2px}
+table.grid td{border-bottom:1px solid var(--line);border-left:1px solid var(--line)}
+
+.method{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.method h3{font-size:13px;margin:0 0 6px}
+.method p,.method li{color:var(--muted);font-size:13px;margin:0}
+.method ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.formula{font-family:var(--mono);font-size:12.5px;background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:10px 12px;line-height:1.7;overflow-x:auto;white-space:pre;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">European options · Black-Scholes-Merton</div>
+      <h1>Black-Scholes <em>Desk</em></h1>
+    </div>
+    <p class="lede">Price a call or put, read its Greeks, back out implied volatility from a market quote, and stress-test the position across spot and vol. Example inputs are loaded; change anything.</p>
+  </header>
+
+  <div class="layout">
+    <aside class="panel inputs" aria-label="Inputs">
+      <div class="seg" role="group" aria-label="Option type">
+        <button id="t-call" aria-pressed="true">Call</button>
+        <button id="t-put" aria-pressed="false">Put</button>
+      </div>
+      <div class="fields" id="fields"></div>
+      <hr class="sep">
+      <p class="group-title">Market &amp; position</p>
+      <div class="mini">
+        <label for="mkt">Market price per share (your entry)</label>
+        <div class="numwrap"><span>$</span><input id="mkt" type="number" step="0.01" min="0" value="6.10"></div>
+      </div>
+      <div class="seg" role="group" aria-label="Side">
+        <button id="s-long" aria-pressed="true">Long</button>
+        <button id="s-short" aria-pressed="false">Short</button>
+      </div>
+      <div class="pair">
+        <div class="mini">
+          <label for="qty">Contracts</label>
+          <div class="numwrap"><input id="qty" type="number" step="1" min="1" value="5"></div>
+        </div>
+        <div class="mini">
+          <label for="hz">Scenario horizon</label>
+          <div class="numwrap"><input id="hz" type="number" step="1" min="0" value="14"><span>d</span></div>
+        </div>
+      </div>
+      <p class="hint">1 contract = 100 shares. Rates and yields are continuously compounded, annualised.</p>
+    </aside>
+
+    <main>
+      <div class="quote" id="quote"></div>
+
+      <section class="panel">
+        <div class="sec-head">
+          <h2>Greeks</h2>
+          <p id="greek-sub">Per share and for your whole position</p>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Greek</th><th class="n">Per share</th><th class="n">Position</th><th>What it means</th></tr></thead>
+            <tbody id="greeks"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <div class="two">
+        <section class="panel">
+          <div class="sec-head"><h2>Implied volatility &amp; edge</h2></div>
+          <div id="ivbox"></div>
+        </section>
+        <section class="panel">
+          <div class="sec-head"><h2>Model internals</h2><p>Checks you can verify by hand</p></div>
+          <dl class="kv" id="internals"></dl>
+        </section>
+      </div>
+
+      <section class="panel">
+        <div class="sec-head">
+          <h2>Value vs stock price</h2>
+          <p>Model value today, at your scenario horizon, and at expiry</p>
+        </div>
+        <div class="chartbox"><canvas id="c-value" aria-label="Option value versus stock price chart"></canvas></div>
+        <div class="legend" id="lg-value"></div>
+      </section>
+
+      <section class="panel">
+        <div class="sec-head">
+          <h2>Greek profile</h2>
+          <div class="tabs" id="gtabs" role="group" aria-label="Greek to chart"></div>
+        </div>
+        <div class="chartbox"><canvas id="c-greek" aria-label="Greek versus stock price chart"></canvas></div>
+        <div class="legend" id="lg-greek"></div>
+      </section>
+
+      <section class="panel">
+        <div class="sec-head">
+          <h2>Scenario P&amp;L</h2>
+          <p id="grid-sub"></p>
+        </div>
+        <div class="tablewrap"><table class="grid" id="grid"></table></div>
+      </section>
+
+      <section class="panel">
+        <div class="sec-head"><h2>How the model works</h2></div>
+        <div class="method">
+          <div>
+            <h3>Pricing</h3>
+            <div class="formula">d₁ = [ln(S/K) + (r − q + σ²/2)T] / (σ√T)
+d₂ = d₁ − σ√T
+Call = S·e⁻ᑫᵀ·N(d₁) − K·e⁻ʳᵀ·N(d₂)
+Put  = K·e⁻ʳᵀ·N(−d₂) − S·e⁻ᑫᵀ·N(−d₁)</div>
+          </div>
+          <div>
+            <h3>Units used here</h3>
+            <ul>
+              <li>Vega and vanna: per 1 volatility point (28% → 29%).</li>
+              <li>Theta and charm: per calendar day (365-day year).</li>
+              <li>Rho: per 1 rate point (4.00% → 5.00%).</li>
+              <li>Implied vol: Newton-Raphson on vega, with a bisection fallback when vega is too small.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Where it breaks down</h3>
+            <ul>
+              <li>Assumes one constant volatility. Real markets have a skew, so IV differs by strike.</li>
+              <li>European exercise only. American puts and calls on dividend payers can be worth more.</li>
+              <li>Lognormal returns understate crash and gap risk.</li>
+              <li>Your edge is only as good as your volatility forecast.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+(function(){
+// ---------- math ----------
+function ncdf(x){ // West (2005) / Hart double-precision
+  const a=Math.abs(x); let c;
+  if(a>37){c=0}else{
+    const e=Math.exp(-a*a/2);
+    if(a<7.07106781186547){
+      let b=3.52624965998911e-02*a+0.700383064443688;
+      b=b*a+6.37396220353165; b=b*a+33.912866078383; b=b*a+112.079291497871;
+      b=b*a+221.213596169931; b=b*a+220.206867912376; c=e*b;
+      b=8.83883476483184e-02*a+1.75566716318264;
+      b=b*a+16.064177579207; b=b*a+86.7807322029461; b=b*a+296.564248779674;
+      b=b*a+637.333633378831; b=b*a+793.826512519948; b=b*a+440.413735824752;
+      c=c/b;
+    }else{
+      let b=a+0.65; b=a+4/b; b=a+3/b; b=a+2/b; b=a+1/b; c=e/b/2.506628274631;
+    }
+  }
+  return x>0?1-c:c;
+}
+const npdf=x=>Math.exp(-x*x/2)/2.5066282746310002;
+
+function bs(S,K,T,r,q,sig,type){
+  const call=type==='call';
+  if(T<=1e-9||sig<=1e-9){
+    const fwd=S*Math.exp(-q*Math.max(T,0)), dk=K*Math.exp(-r*Math.max(T,0));
+    const price=Math.max(call?fwd-dk:dk-fwd,0);
+    const itm=call?S>K:S<K;
+    return {price,delta:itm?(call?1:-1):0,gamma:0,vega:0,theta:0,rho:0,vanna:0,charm:0,vomma:0,d1:NaN,d2:NaN,Nd1:NaN,Nd2:NaN};
+  }
+  const sT=Math.sqrt(T), v=sig*sT;
+  const d1=(Math.log(S/K)+(r-q+sig*sig/2)*T)/v, d2=d1-v;
+  const eq=Math.exp(-q*T), er=Math.exp(-r*T), pd1=npdf(d1);
+  const Nd1=ncdf(d1), Nd2=ncdf(d2), Nm1=ncdf(-d1), Nm2=ncdf(-d2);
+  const price=call? S*eq*Nd1-K*er*Nd2 : K*er*Nm2-S*eq*Nm1;
+  const delta=call? eq*Nd1 : -eq*Nm1;
+  const gamma=eq*pd1/(S*v);
+  const vegaRaw=S*eq*pd1*sT;
+  const common=-S*eq*pd1*sig/(2*sT);
+  const thetaYr=call? common-r*K*er*Nd2+q*S*eq*Nd1 : common+r*K*er*Nm2-q*S*eq*Nm1;
+  const rho=(call? K*T*er*Nd2 : -K*T*er*Nm2)/100;
+  const vanna=-eq*pd1*d2/sig/100;                 // Δdelta per 1 vol pt
+  const charmCore=eq*pd1*(2*(r-q)*T-d2*v)/(2*T*v);
+  const charmYr=call? q*eq*Nd1-charmCore : -q*eq*Nm1-charmCore; // -dDelta/dT
+  const vomma=vegaRaw*d1*d2/sig/10000;            // Δvega(per pt) per 1 vol pt
+  return {price,delta,gamma,vega:vegaRaw/100,theta:thetaYr/365,rho,vanna,charm:charmYr/365,vomma,d1,d2,Nd1,Nd2,vegaRaw};
+}
+
+function impliedVol(P,S,K,T,r,q,type){
+  const eq=Math.exp(-q*T), er=Math.exp(-r*T);
+  const lo=type==='call'?Math.max(S*eq-K*er,0):Math.max(K*er-S*eq,0);
+  const hi=type==='call'?S*eq:K*er;
+  if(!(P>lo+1e-10)) return {err:`Price is at or below the no-arbitrage floor of $${lo.toFixed(2)}.`};
+  if(!(P<hi)) return {err:`Price is above the no-arbitrage ceiling of $${hi.toFixed(2)}.`};
+  let s=Math.min(Math.max(Math.sqrt(2*Math.PI/T)*P/S,0.05),3);
+  for(let i=0;i<50;i++){
+    const o=bs(S,K,T,r,q,s,type), diff=o.price-P;
+    if(Math.abs(diff)<1e-8) return {iv:s,iters:i+1,method:'Newton'};
+    if(o.vegaRaw<1e-6) break;
+    const ns=s-diff/o.vegaRaw;
+    if(!(ns>1e-4&&ns<5)) break;
+    s=ns;
+  }
+  let a=1e-4,b=5;
+  for(let i=0;i<200;i++){
+    const m=(a+b)/2, d=bs(S,K,T,r,q,m,type).price-P;
+    if(Math.abs(d)<1e-8||b-a<1e-10) return {iv:m,iters:i+1,method:'bisection'};
+    if(d>0) b=m; else a=m;
+  }
+  return {iv:(a+b)/2,iters:200,method:'bisection'};
+}
+
+// ---------- inputs ----------
+const F=[
+  {id:'S',label:'Stock price',pre:'$',min:1,max:500,step:0.01,val:185.40},
+  {id:'K',label:'Strike',pre:'$',min:1,max:500,step:0.5,val:190},
+  {id:'D',label:'Days to expiry',suf:'d',min:1,max:730,step:1,val:45},
+  {id:'V',label:'Volatility σ (your forecast)',suf:'%',min:1,max:150,step:0.1,val:28},
+  {id:'R',label:'Risk-free rate',suf:'%',min:0,max:15,step:0.05,val:4.00},
+  {id:'Q',label:'Dividend yield',suf:'%',min:0,max:10,step:0.05,val:0.50},
+];
+const fieldsEl=document.getElementById('fields');
+F.forEach(f=>{
+  const d=document.createElement('div'); d.className='field';
+  d.innerHTML=`<label class="row" for="n-${f.id}"><span class="lbl">${f.label}</span>
+    <span class="numwrap">${f.pre?`<span>${f.pre}</span>`:''}<input id="n-${f.id}" type="number" min="${f.min}" step="${f.step}" value="${f.val}">${f.suf?`<span>${f.suf}</span>`:''}</span></label>
+    <input id="r-${f.id}" type="range" min="${f.min}" max="${f.max}" step="${f.step}" value="${f.val}" aria-label="${f.label}">`;
+  fieldsEl.appendChild(d);
+  const n=d.querySelector('input[type=number]'), rg=d.querySelector('input[type=range]');
+  rg.addEventListener('input',()=>{n.value=rg.value;render()});
+  n.addEventListener('input',()=>{
+    const v=parseFloat(n.value); if(!isFinite(v)) return;
+    if(v>+rg.max) rg.max=Math.ceil(v*1.5);
+    rg.value=v; render();
+  });
+});
+let type='call', side=1, gtab='delta';
+function seg(a,b,fn){
+  const A=document.getElementById(a),B=document.getElementById(b);
+  A.onclick=()=>{A.setAttribute('aria-pressed','true');B.setAttribute('aria-pressed','false');fn(0);render()};
+  B.onclick=()=>{B.setAttribute('aria-pressed','true');A.setAttribute('aria-pressed','false');fn(1);render()};
+}
+seg('t-call','t-put',i=>type=i?'put':'call');
+seg('s-long','s-short',i=>side=i?-1:1);
+['mkt','qty','hz'].forEach(id=>document.getElementById(id).addEventListener('input',render));
+
+const GT=[['delta','Delta'],['gamma','Gamma'],['vega','Vega'],['theta','Theta'],['rho','Rho']];
+const gtabs=document.getElementById('gtabs');
+GT.forEach(([k,l])=>{const b=document.createElement('button');b.textContent=l;b.dataset.k=k;b.setAttribute('aria-pressed',k===gtab);b.onclick=()=>{gtab=k;[...gtabs.children].forEach(x=>x.setAttribute('aria-pressed',x.dataset.k===k));render()};gtabs.appendChild(b)});
+
+function num(id){const v=parseFloat(document.getElementById(id).value);return isFinite(v)?v:0}
+function get(){
+  return {S:Math.max(num('n-S'),0.01),K:Math.max(num('n-K'),0.01),days:Math.max(num('n-D'),0),
+    sig:Math.max(num('n-V'),0.01)/100,r:num('n-R')/100,q:num('n-Q')/100,
+    mkt:num('mkt'),qty:Math.max(Math.round(num('qty')),1),hz:Math.max(num('hz'),0)};
+}
+
+// ---------- formatting ----------
+const $=(v,d=2)=>(v<0?'−$':'$')+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const f=(v,d=4)=>(v<0?'−':'')+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const sgn=(v,d=2)=>(v>0?'+':v<0?'−':'')+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct=(v,d=2)=>(v*100).toFixed(d)+'%';
+
+// ---------- charts ----------
+const tok=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let cV=null,cG=null;
+function baseOpts(yFmt){
+  const ink=tok('--muted'),grid=tok('--grid');
+  return {animation:false,responsive:true,maintainAspectRatio:false,parsing:false,
+    interaction:{mode:'nearest',axis:'x',intersect:false},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:tok('--surface'),titleColor:tok('--ink'),bodyColor:tok('--ink'),borderColor:tok('--line'),borderWidth:1,
+      titleFont:{family:'IBM Plex Mono'},bodyFont:{family:'IBM Plex Mono'},
+      callbacks:{title:it=>'Stock '+$(it[0].parsed.x),label:it=>it.dataset.label+': '+yFmt(it.parsed.y)}}},
+    scales:{x:{type:'linear',grid:{color:grid},ticks:{color:ink,font:{family:'IBM Plex Mono',size:11},callback:v=>'$'+v}},
+            y:{grid:{color:grid},ticks:{color:ink,font:{family:'IBM Plex Mono',size:11},callback:v=>yFmt(v)}}}};
+}
+function ds(label,color,dash,width){return {label,data:[],borderColor:color,backgroundColor:color,borderWidth:width||2,borderDash:dash||[],pointRadius:0,tension:0}}
+function build(){
+  if(!window.Chart) return;
+  cV&&cV.destroy(); cG&&cG.destroy();
+  const acc=tok('--accent'),mut=tok('--faint'),ink=tok('--ink');
+  cV=new Chart(document.getElementById('c-value'),{type:'line',data:{datasets:[
+    ds('Today',acc),ds('At horizon',tok('--warn'),[6,4]),ds('At expiry',mut,[2,3],1.5),
+    {label:'Now',data:[],type:'scatter',pointRadius:5,pointBackgroundColor:acc,pointBorderColor:tok('--surface'),pointBorderWidth:2}
+  ]},options:baseOpts(v=>'$'+(+v).toFixed(2))});
+  cG=new Chart(document.getElementById('c-greek'),{type:'line',data:{datasets:[
+    ds('Today',acc),ds('Halfway to expiry',tok('--warn'),[6,4]),
+    {label:'Now',data:[],type:'scatter',pointRadius:5,pointBackgroundColor:acc,pointBorderColor:tok('--surface'),pointBorderWidth:2}
+  ]},options:baseOpts(v=>(+v).toFixed(3))});
+  const leg=(el,items)=>document.getElementById(el).innerHTML=items.map(([c,l,d])=>`<span><i style="background:${c};${d?'background:repeating-linear-gradient(90deg,'+c+' 0 5px,transparent 5px 8px)':''}"></i>${l}</span>`).join('');
+  leg('lg-value',[[acc,'Model value today'],[tok('--warn'),'At scenario horizon',1],[mut,'Payoff at expiry',1]]);
+  leg('lg-greek',[[acc,'Today'],[tok('--warn'),'Halfway to expiry',1]]);
+}
+
+// ---------- render ----------
+function render(){
+  const p=get(), T=p.days/365, o=bs(p.S,p.K,T,p.r,p.q,p.sig,type);
+  const mult=100*p.qty*side, call=type==='call';
+  const other=bs(p.S,p.K,T,p.r,p.q,p.sig,call?'put':'call');
+  const C=call?o.price:other.price, P=call?other.price:o.price;
+
+  // quote strip
+  const intrinsic=Math.max(call?p.S-p.K:p.K-p.S,0);
+  const m=p.S/p.K, atm=Math.abs(m-1)<0.02;
+  const itm=call?p.S>p.K:p.S<p.K;
+  const mon=atm?['ATM','neutral']:itm?['ITM','good']:['OTM','warn'];
+  const be=call?p.K+o.price:p.K-o.price;
+  const probITM=call?o.Nd2:1-o.Nd2;
+  document.getElementById('quote').innerHTML=`
+    <div class="q main"><span class="k">${call?'Call':'Put'} value</span><span class="v">${$(o.price)}</span><span class="chip ${mon[1]}">${mon[0]} · ${pct(m-1,1).replace('-','−')} moneyness</span></div>
+    <div class="q"><span class="k">Intrinsic / time</span><span class="v">${$(intrinsic)}</span><span class="s">${$(o.price-intrinsic)} time value</span></div>
+    <div class="q"><span class="k">Breakeven at expiry</span><span class="v">${$(be)}</span><span class="s">${sgn((be/p.S-1)*100,1)}% from spot</span></div>
+    <div class="q"><span class="k">Finishes in the money</span><span class="v">${(probITM*100).toFixed(1)}%</span><span class="s">Risk-neutral N(${call?'d₂':'−d₂'})</span></div>`;
+
+  // greeks table
+  const pos=v=>v*mult;
+  const up=(v,unit)=>`${v>=0?'Gains':'Loses'} ${$(Math.abs(v),3)} per share ${unit}`;
+  const rows=[
+    ['Δ','Delta',o.delta,4,pos(o.delta),`Moves ${$(Math.abs(o.delta),2)} per $1 in the stock. Position acts like ${sgn(pos(o.delta),0)} shares.`,false,true],
+    ['Γ','Gamma',o.gamma,4,pos(o.gamma),`Delta shifts by ${f(o.gamma,4)} for each $1 the stock moves.`,false,true],
+    ['ν','Vega',o.vega,4,pos(o.vega),up(o.vega,'if volatility rises 1 point.'),false,false],
+    ['Θ','Theta',o.theta,4,pos(o.theta),`${o.theta<=0?'Loses':'Gains'} ${$(Math.abs(o.theta),3)} per share per day from time passing.`,false,false],
+    ['ρ','Rho',o.rho,4,pos(o.rho),up(o.rho,'if rates rise 1 point.'),false,false],
+    ['sub','Second-order'],
+    ['','Vanna',o.vanna,5,pos(o.vanna),`Delta changes by ${f(o.vanna,4)} per 1 vol point.`,true,true],
+    ['','Charm',o.charm,5,pos(o.charm),`Delta drifts by ${f(o.charm,4)} per day with nothing else changing.`,true,true],
+    ['','Vomma',o.vomma,5,pos(o.vomma),`Vega changes by ${$(Math.abs(o.vomma),4)} per 1 vol point.`,true,false],
+  ];
+  document.getElementById('greeks').innerHTML=rows.map(r=>{
+    if(r[0]==='sub') return `<tr class="subhead"><td colspan="4">${r[1]}</td></tr>`;
+    const [sym,name,v,d,pv,mean,sec,share]=r;
+    const posStr=share?(Math.abs(pv)<0.005&&pv!==0?f(pv,4):sgn(pv,2))+' sh':(pv<0?'−$':'$')+Math.abs(pv).toFixed(2);
+    return `<tr class="${sec?'second':''}"><td>${sym?`<span class="gsym">${sym}</span>`:''}<span class="gname">${name}</span></td><td class="n">${f(v,d)}</td><td class="n">${posStr}</td><td class="meaning">${mean}</td></tr>`;
+  }).join('');
+  document.getElementById('greek-sub').textContent=`Position: ${side>0?'long':'short'} ${p.qty} contract${p.qty>1?'s':''} (${p.qty*100} shares)`;
+
+  // IV & edge
+  const ivb=document.getElementById('ivbox');
+  if(!(p.mkt>0)){ivb.innerHTML='<p class="hint">Enter a market price to solve for implied volatility.</p>'}
+  else{
+    const iv=impliedVol(p.mkt,p.S,p.K,T,p.r,p.q,type);
+    if(iv.err){ivb.innerHTML=`<p class="err">${iv.err}</p>`}
+    else{
+      const edge=o.price-p.mkt, edgePct=edge/p.mkt;
+      const fair=Math.abs(edgePct)<0.02;
+      const verdict=fair?['Fairly priced','neutral','Your model and the market roughly agree.']
+        :edge>0?['Market looks cheap','good',`At your ${pct(p.sig,1)} forecast the option is worth more than the quote. A long position has model edge.`]
+        :['Market looks rich','bad',`At your ${pct(p.sig,1)} forecast the option is worth less than the quote. Selling it has model edge.`];
+      const posEdge=edge*mult;
+      ivb.innerHTML=`<div class="verdict"><span class="chip ${verdict[1]}">${verdict[0]}</span>
+        <span class="big">${sgn(edge,2)} / share <span style="color:var(--muted);font-size:14px">(${sgn(edgePct*100,1)}%)</span></span>
+        <p>${verdict[2]}</p></div>
+        <dl class="kv">
+          <dt>Implied volatility</dt><dd>${pct(iv.iv,2)}</dd>
+          <dt>Your volatility</dt><dd>${pct(p.sig,2)}</dd>
+          <dt>Vol spread (yours − implied)</dt><dd>${sgn((p.sig-iv.iv)*100,2)} pts</dd>
+          <dt>Model edge on your ${side>0?'long':'short'} position</dt><dd style="color:${posEdge>=0?'var(--good)':'var(--bad)'}">${sgn(posEdge,2).replace(/^([+−])/,'$1$')}</dd>
+          <dt>Solver</dt><dd>${iv.method}, ${iv.iters} step${iv.iters>1?'s':''}</dd>
+        </dl>`;
+    }
+  }
+
+  // internals
+  const parL=C-P, parR=p.S*Math.exp(-p.q*T)-p.K*Math.exp(-p.r*T);
+  const move=p.S*p.sig*Math.sqrt(T);
+  document.getElementById('internals').innerHTML=`
+    <dt>d₁</dt><dd>${f(o.d1,4)}</dd><dt>d₂</dt><dd>${f(o.d2,4)}</dd>
+    <dt>N(d₁)</dt><dd>${f(o.Nd1,4)}</dd><dt>N(d₂)</dt><dd>${f(o.Nd2,4)}</dd>
+    <dt>Time T (years)</dt><dd>${T.toFixed(4)}</dd>
+    <dt>Call / put</dt><dd>${$(C)} / ${$(P)}</dd>
+    <dt>Parity: C − P</dt><dd>${$(parL,4)}</dd>
+    <dt>Parity: Se⁻ᑫᵀ − Ke⁻ʳᵀ</dt><dd>${$(parR,4)}</dd>
+    <dt>1σ expected move to expiry</dt><dd>±${$(move)}</dd>`;
+
+  // charts
+  if(cV&&cG){
+    const lo=Math.max(0.5,Math.min(p.S,p.K)*0.6), hi=Math.max(p.S,p.K)*1.4, N=140;
+    const Th=Math.max(T-p.hz/365,0), Tm=T/2;
+    const a=[],b=[],c=[],g1=[],g2=[];
+    for(let i=0;i<=N;i++){
+      const s=lo+(hi-lo)*i/N;
+      const x=+s.toFixed(4);
+      const now=bs(s,p.K,T,p.r,p.q,p.sig,type);
+      a.push({x,y:now.price});
+      b.push({x,y:bs(s,p.K,Th,p.r,p.q,p.sig,type).price});
+      c.push({x,y:Math.max(call?s-p.K:p.K-s,0)});
+      g1.push({x,y:now[gtab]});
+      g2.push({x,y:bs(s,p.K,Tm,p.r,p.q,p.sig,type)[gtab]});
+    }
+    cV.data.datasets[0].data=a; cV.data.datasets[1].data=b; cV.data.datasets[2].data=c;
+    cV.data.datasets[1].label=`In ${p.hz}d`;
+    cV.data.datasets[3].data=[{x:p.S,y:o.price}];
+    cV.options.scales.x.min=lo; cV.options.scales.x.max=hi; cV.update('none');
+    cG.data.datasets[0].data=g1; cG.data.datasets[1].data=g2;
+    cG.data.datasets[2].data=[{x:p.S,y:o[gtab]}];
+    cG.options.scales.x.min=lo; cG.options.scales.x.max=hi; cG.update('none');
+    document.getElementById('lg-value').children[1].lastChild.textContent=`In ${p.hz} day${p.hz==1?'':'s'}`;
+  }
+
+  // scenario grid
+  const entry=p.mkt>0?p.mkt:o.price;
+  const Th=Math.max(T-p.hz/365,0);
+  const spots=[-15,-10,-5,0,5,10,15], vols=[10,5,0,-5,-10];
+  const cells=vols.map(dv=>spots.map(dsp=>{
+    const v=bs(p.S*(1+dsp/100),p.K,Th,p.r,p.q,Math.max(p.sig+dv/100,0.005),type).price;
+    return (v-entry)*mult;
+  }));
+  const mx=Math.max(1,...cells.flat().map(Math.abs));
+  document.getElementById('grid').innerHTML=`<thead><tr><th style="text-align:left">Vol \\ Stock</th>${spots.map(s=>`<th>${s>0?'+':s<0?'−':''}${Math.abs(s)}%<br><span style="font-weight:400;color:var(--faint);font-family:var(--mono)">$${(p.S*(1+s/100)).toFixed(2)}</span></th>`).join('')}</tr></thead>
+    <tbody>${cells.map((row,i)=>`<tr><td class="rowh">${vols[i]>0?'+':vols[i]<0?'−':''}${Math.abs(vols[i])} pts · ${pct(Math.max(p.sig+vols[i]/100,0.005),0)}</td>${row.map((v,j)=>{
+      const k=Math.round(Math.min(Math.abs(v)/mx,1)*38);
+      const col=v>=0?'var(--good)':'var(--bad)';
+      return `<td class="${vols[i]===0&&spots[j]===0?'cur':''}" style="background:color-mix(in srgb, ${col} ${k}%, transparent)">${v>=0?'+':'−'}$${Math.abs(v).toLocaleString('en-US',{maximumFractionDigits:0})}</td>`}).join('')}</tr>`).join('')}</tbody>`;
+  document.getElementById('grid-sub').textContent=`${side>0?'Long':'Short'} ${p.qty} × ${call?'call':'put'}, ${p.hz} day${p.hz==1?'':'s'} from now, vs entry of ${$(entry)}${p.mkt>0?'':' (model value)'}. Outlined cell = only time passes.`;
+}
+
+build(); render();
+const rebuild=()=>{build();render()};
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',rebuild)}catch(e){}
+new MutationObserver(rebuild).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+})();
+</script>
+
+</body>
+</html>
